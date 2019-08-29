@@ -8,8 +8,8 @@ to the WeeWX data stream.
 
     ```shell
     cd /home/weewx
-    wget https://github.com/tkeffer/weewx-nmea-xdr/archive/weewx-nmea-xdr-1.0.0.tar.gz
-    wee_extension --install=weewx-nmea-xdr-1.0.0.tar.gz
+    wget https://github.com/tkeffer/weewx-nmea-xdr/archive/nmea-xdr-0.1.0.tar.gz
+    wee_extension --install=nmea-xdr-0.1.0.tar.gz
     ```
 
 2. Edit the new stanza `[XDR]` to reflect your situation. Here's an example:
