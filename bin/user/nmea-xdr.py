@@ -3,7 +3,36 @@
 #
 #    See the file LICENSE.txt for your full rights.
 #
-"""Service that decodes NMEA 0183 "XDR" statements and puts the results in the data stream."""
+"""Service that decodes NMEA 0183 "XDR" sentences and puts the results in the data stream.
+
+To use:
+
+1. Include a stanza in your weewx.conf configuration file:
+
+[XDR]
+    port = /dev/ttyACM0         # Default is '/dev/ttyACM0'
+    baudrate = 9600             # Default is '9600'
+    timeout = 5                 # How long to wait for an XDR packet. Default is 5
+    max_packets = 5             # Max number of packets to process during a LOOP event. Default is 5
+
+    # Map from weewx names to sensor names. Only these types will be processed.
+    # Typical sensor map:
+    [[sensor_map]]
+        pressure = P    # Raw, station pressure
+        outTemp = C     # Temperature
+
+2. Add the XDR service to the list of data_services to be run:
+
+[Engine]
+  [[Services]]
+    ...
+    data_services = nmea-xdr.XDR
+
+3. Put this file (nmea-xdr.py) in your WeeWX user subdirectory.
+For example, if you installed using setup.py,
+
+    cp nmea-xdr.py /home/weewx/bin/user
+"""
 
 try:
     import queue
@@ -83,7 +112,7 @@ class XDR(weewx.engine.StdService):
 
         self.queue = queue.Queue()
 
-        self.bind(weewx.PRE_LOOP, self.startup)
+        self.bind(weewx.STARTUP, self.startup)
         self.bind(weewx.NEW_LOOP_PACKET, self.new_loop_packet)
 
         self.thread = XDRThread(self.queue, port, baudrate, timeout)
@@ -107,14 +136,18 @@ class XDR(weewx.engine.StdService):
             except queue.Empty:
                 return
 
+            if weewx.debug >= 2:
+                logdbg("Raw XDR data: %s" % xdr_line)
+
             parts = xdr_line.split(',')
             # Each sensor in an XDR sensor has four parts. Group the sentence accordingly.
             it = iter(parts[1:])
-            sentences = list(zip(*[it, it, it, it]))
+            sentences = zip(*[it, it, it, it])
+
+            # The variable sentences is a list of 4-way tuples. Handle each tuple separately.
             for transducer_type, data, unit, name in sentences:
                 # Check for sensors with no data.
                 if transducer_type and data and unit:
-                    print(transducer_type, data, unit, name)
                     # Look for this transducer type in the sensor map
                     for obs_type in self.sensor_map:
                         if self.sensor_map[obs_type] == transducer_type:
@@ -135,6 +168,9 @@ class XDR(weewx.engine.StdService):
                                 unit = 'mbar'
                                 group = 'group_pressure'
                             else:
+                                if weewx.debug >= 2:
+                                    logdbg("Rejected: %s, %f, %s, %s"
+                                           % (transducer_type, f_data, unit, name))
                                 continue
 
                             # Form a ValueTuple using the unit and unit group
@@ -143,6 +179,9 @@ class XDR(weewx.engine.StdService):
                             target_t = weewx.units.convertStd(val_t, event.packet['usUnits'])
                             # Now update the value in the packet
                             event.packet[obs_type] = target_t.value
+                            if weewx.debug >= 2:
+                                logdbg("Set type '%s' to %.3f from transducer '%s'"
+                                       % (obs_type, event.packet[obs_type], name))
 
     def shutDown(self):
         global run_lock
