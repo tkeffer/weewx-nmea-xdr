@@ -2,6 +2,10 @@
 WeeWX service that decodes NMEA 0183 "XDR" sentences and adds values
 to the WeeWX data stream.
 
+Tested on a [Dracal USB-BAR20-N](https://www.dracal.com/store/products/usb_bar20_n/index.php).
+This is an interesting little instrument because it can add accurate barometric pressure to a data
+stream, making it perfect for those who are collecting data using a software-defined radio (SDR).
+
 ## Installation instructions
 
 1. Download and install the extension
