@@ -1,5 +1,5 @@
 #
-#    Copyright (c) 2019 Tom Keffer <tkeffer@gmail.com>
+#    Copyright (c) 2019-2020 Tom Keffer <tkeffer@gmail.com>
 #
 #    See the file LICENSE.txt for your full rights.
 #
@@ -38,6 +38,7 @@ try:
     import queue
 except ImportError:
     import Queue as queue
+import operator
 import threading
 from functools import reduce
 
@@ -86,9 +87,9 @@ except ImportError:
     def logerr(msg):
         logmsg(syslog.LOG_ERR, msg)
 
-VERSION = "0.10"
+VERSION = "0.11"
 
-# Lock used to coordinate access to the "keep_running" variable
+# Lock used to coordinate access to the "keep_running" variable in the child thread
 run_lock = threading.Lock()
 
 
@@ -99,7 +100,7 @@ class XDR(weewx.engine.StdService):
         # Initialize my superclass:
         super(XDR, self).__init__(engine, config_dict)
 
-        # Extract our stanza from the configuration dicdtionary
+        # Extract our stanza from the configuration dictionary
         xdr_dict = config_dict.get('XDR', {})
 
         # Extract stuff out of the resultant dictionary
@@ -140,13 +141,13 @@ class XDR(weewx.engine.StdService):
                 logdbg("Raw XDR data: %s" % xdr_line)
 
             parts = xdr_line.split(',')
-            # Each sensor in an XDR sensor has four parts. Group the sentence accordingly.
+            # Each sensor in an XDR sentence has four parts. Group the sentence accordingly.
             it = iter(parts[1:])
             sentences = zip(*[it, it, it, it])
 
-            # The variable sentences is a list of 4-way tuples. Handle each tuple separately.
+            # The variable 'sentences' is a list of 4-way tuples. Handle each tuple separately.
             for transducer_type, data, unit, name in sentences:
-                # Check for sensors with no data.
+                # Ignore sensors with no data by making sure that these three variables are there:
                 if transducer_type and data and unit:
                     # Look for this transducer type in the sensor map
                     for obs_type in self.sensor_map:
@@ -156,6 +157,7 @@ class XDR(weewx.engine.StdService):
                             try:
                                 f_data = float(data)
                             except ValueError:
+                                # If we can't convert it to a float, ignore it.
                                 continue
                             if unit == 'C':
                                 unit = 'degree_C'
@@ -222,7 +224,8 @@ class XDRThread(threading.Thread):
                     if not self.keep_running:
                         return
 
-                # Read a line. It may end with \r\n. Strip it off. Convert from bytes to unicode string
+                # Block, waiting to read a line. It may end with \r\n. Strip it off. Convert from bytes to unicode
+                # string
                 line = device.readline().strip().decode('ascii')
 
                 # Look for the '$' symbol which marks the start of an NMEA 0183 sentence.
@@ -230,7 +233,7 @@ class XDRThread(threading.Thread):
                     # No '$'. Ignore the line.
                     continue
 
-                # Find the start of the checksum
+                # Find the start of the checksum. It's marked with an asterisk.
                 asterisk = line.rfind(u'*')
                 if asterisk == -1:
                     # No asterisk. Ignore the line.
@@ -244,8 +247,8 @@ class XDRThread(threading.Thread):
                     # Garbage in expected checksum. On to the next line
                     continue
                 # Calculate the actual checksum by XORing everything together between the dollar
-                # sign and the asterisk.
-                actual_cs = reduce(lambda cs, c: cs ^ ord(c), line[1:asterisk], 0)
+                # sign and the asterisk. The following works under both Python 2 and 3.
+                actual_cs = reduce(operator.xor, bytearray(line[1:asterisk]), 0)
                 # If they don't match, ignore the line
                 if expected_cs != actual_cs:
                     continue

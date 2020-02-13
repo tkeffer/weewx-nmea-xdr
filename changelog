@@ -1,2 +1,4 @@
+0.11 12feb2020
+* Use operator.xor to do the reduce
 0.10 29aug2019
 * initial version
