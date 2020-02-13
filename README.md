@@ -69,7 +69,7 @@ in the sensor map will be parsed and added to the LOOP packet.
     [Engine]
       [[Services]]
         ...
-        data_services = nmea-xdr.XDR
+        data_services = nmea-xdr.py
     ```
 
 2. Put this file (nmea-xdr.py) in your WeeWX user subdirectory.
